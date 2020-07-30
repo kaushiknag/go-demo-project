@@ -1,0 +1,44 @@
+NODE_ENV?=local
+
+CLUSTER_SERVICE_DB_USER?=root
+CLUSTER_SERVICE_DB_PASSWORD?=swiggy1234
+CLUSTER_SERVICE_DB_HOST?=127.0.0.1
+CLUSTER_SERVICE_DB_NAME?=swiggy
+
+BROKER_HOSTS?=127.0.0.1:9092
+
+AWS_DYNAMODB_END_POINT?=http://127.0.0.1:8000
+AWS_DYNAMODB_REGION?=ap-southeast-1
+AWS_DYNAMODB_TABLE_NAME?=user_details
+AWS_DYNAMODB_ACCESS_KEY_ID?=localAccessKeyId
+AWS_DYNAMODB_SECRET_ACCESS_KEY?=localSecretAccessKey
+AWS_DYNAMODB_WRITE_ALLOWED?=true
+AWS_DYNAMODB_READ_ALLOWED?=true
+
+EXPIRY_BUCKETS?=100
+
+.PHONY: setup_dynamodb
+
+setup_dynamodb:
+	aws configure set aws_access_key_id localAccessKeyId
+	aws configure set aws_secret_access_key localSecretAccessKey
+	aws configure set default.region ap-southeast-1
+	aws configure set region ap-southeast-1
+	aws dynamodb create-table --table-name user_details --attribute-definitions AttributeName=name,AttributeType=S --key-schema AttributeName=name,KeyType=HASH --provisioned-throughput ReadCapacityUnits=20,WriteCapacityUnits=20 --endpoint-url http://localhost:8000;
+	AWS_DYNAMODB_END_POINT=$(AWS_DYNAMODB_END_POINT) AWS_DYNAMODB_REGION=$(AWS_DYNAMODB_REGION) AWS_DYNAMODB_TABLE_NAME=$(AWS_DYNAMODB_TABLE_NAME) AWS_DYNAMODB_ACCESS_KEY_ID=$(AWS_DYNAMODB_ACCESS_KEY_ID) AWS_DYNAMODB_SECRET_ACCESS_KEY=$(AWS_DYNAMODB_SECRET_ACCESS_KEY) AWS_DYNAMODB_WRITE_ALLOWED=$(AWS_DYNAMODB_WRITE_ALLOWED) AWS_DYNAMODB_READ_ALLOWED=$(AWS_DYNAMODB_READ_ALLOWED)
+
+.PHONY: setup_kafka
+
+setup_kafka:
+	NODE_ENV=$(NODE_ENV) BROKER_HOSTS=$(BROKER_HOSTS)
+
+.PHONY: create_db_test
+
+create_db_test:
+	mysql -h"$(CLUSTER_SERVICE_DB_HOST)" -u"$(CLUSTER_SERVICE_DB_USER)" -p"$(CLUSTER_SERVICE_DB_PASSWORD)" -e "DROP DATABASE IF EXISTS swiggy"
+	mysql -h"$(CLUSTER_SERVICE_DB_HOST)" -u"$(CLUSTER_SERVICE_DB_USER)" -p"$(CLUSTER_SERVICE_DB_PASSWORD)" -e "CREATE DATABASE swiggy"
+	mysql -h"$(CLUSTER_SERVICE_DB_HOST)" -u"$(CLUSTER_SERVICE_DB_USER)" -p"$(CLUSTER_SERVICE_DB_PASSWORD)" swiggy -e "CREATE TABLE IF NOT EXISTS user (id int(11) NOT NULL AUTO_INCREMENT,name varchar(45) DEFAULT NULL,PRIMARY KEY (id),UNIQUE KEY name_UNIQUE (name)) ENGINE=InnoDB;"
+	mysql -h"$(CLUSTER_SERVICE_DB_HOST)" -u"$(CLUSTER_SERVICE_DB_USER)" -p"$(CLUSTER_SERVICE_DB_PASSWORD)" swiggy -e "ALTER TABLE user ADD COLUMN location VARCHAR(45) NULL AFTER name;"
+	mysql -h"$(CLUSTER_SERVICE_DB_HOST)" -u"$(CLUSTER_SERVICE_DB_USER)" -p"$(CLUSTER_SERVICE_DB_PASSWORD)" swiggy -e "DROP USER IF EXISTS 'MYSQL_USER'@'%'"
+	mysql -h"$(CLUSTER_SERVICE_DB_HOST)" -u"$(CLUSTER_SERVICE_DB_USER)" -p"$(CLUSTER_SERVICE_DB_PASSWORD)" swiggy -e "CREATE USER 'MYSQL_USER'@'%' identified by 'swiggy1234'"
+	mysql -h"$(CLUSTER_SERVICE_DB_HOST)" -u"$(CLUSTER_SERVICE_DB_USER)" -p"$(CLUSTER_SERVICE_DB_PASSWORD)" swiggy -e "GRANT ALL PRIVILEGES ON *.* TO 'MYSQL_USER'@'%'"
